@@ -147,8 +147,6 @@ Available commands/reponses:
 #### `FW_{CMD,RSP}_RUN_APP`
 #### `FW_{CMD,RSP}_NAME_VERSION`
 #### `FW_{CMD,RSP}_UID`
-#### `FW_{CMD,RSP}_TRNG_DATA`
-#### `FW_{CMD,RSP}_TRNG_STATUS`
 
 #### `FW_{CMD,RSP}_VERIFY_DEVICE`
 
@@ -284,12 +282,11 @@ Examples:
 
 | *name*             | *fw* | *app       | *size* | *type*  | *content* | *description*                                          |
 |--------------------|------|------------|--------|---------|-----------|--------------------------------------------------------|
-| `TRNG_NAME0`       | r    | r          | 4B     | char[4] |           | ID of core                                             |
-| `TRNG_NAME1`       | r    | r          | 4B     | char[4] |           | ID of core                                             |
+| `TRNG_NAME0`       | r    | r          | 4B     | char[4] | "figa"    | ID of core                                             |
+| `TRNG_NAME1`       | r    | r          | 4B     | char[4] | "ro  "    | ID of core                                             |
 | `TRNG_VERSION`     | r    | r          | 4B     | u32     |           | Version of core                                        |
-| `TRNG_STATUS`      | r    | r          |        |         |           | TBD                                                    |
-| `TRNG_SAMPLE_RATE` |      | r          |        |         |           | TBD                                                    |
-| `TRNG_ENTROPY`     |      |            |        |         |           | TBD                                                    |
+| `TRNG_STATUS`      | r    | r          |        |         |           | STATUS_EVENT_BIT is 1 when TRNG_ENTROPY has random data|
+| `TRNG_ENTROPY`     |      |            | 4B     | u32     |           | Random data to read. See TRNG_STATUS                   |
 | `TIMER_NAME0`      | r    | r          |        |         |           | ID of core                                             |
 | `TIMER_NAME1`      | r    | r          |        |         |           | ID of core                                             |
 | `TIMER_VERSION`    | r    | r          |        |         |           | Version of core                                        |
@@ -315,7 +312,7 @@ Examples:
 | `TOUCH_NAME0`      | r    | r          |        |         |           | ID of core                                             |
 | `TOUCH_NAME1`      | r    | r          |        |         |           | ID of core                                             |
 | `TOUCH_VERSION`    | r    | r          |        |         |           | Version of core                                        |
-| `TOUCH_STATUS`     | r/w  | r/w        |        |         |           | STATUS_EVENT_BIT set 1 when touched; write to it after |
+| `TOUCH_STATUS`     | r/w  | r/w        |        |         |           | STATUS_EVENT_BIT is 1 when touched; write to it after  |
 | `UDA`              | r    |            | 16B    | u8[16]  |           | Unique Device Authentication key.                      |
 | `UDI`              | r    |            | 8B     | u64     |           | Unique Device ID (UDI).                                |
 | `QEMU_DEBUG`       | w    | w          |        | u8      |           | Debug console (only in QEMU)                           |

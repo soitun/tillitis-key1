@@ -16,6 +16,8 @@ volatile uint32_t *uda = (volatile uint32_t *)MTA1_MKDF_MMIO_QEMU_UDA; // Only i
 volatile uint32_t *cdi = (volatile uint32_t *)MTA1_MKDF_MMIO_MTA1_CDI_FIRST;
 volatile uint32_t *udi = (volatile uint32_t *)MTA1_MKDF_MMIO_MTA1_UDI_FIRST;
 volatile uint32_t *switch_app = (volatile uint32_t *)MTA1_MKDF_MMIO_MTA1_SWITCH_APP;
+volatile uint32_t *trng_status = (volatile uint32_t *)MTA1_MKDF_MMIO_TRNG_STATUS;
+volatile uint32_t *trng_entropy = (volatile uint32_t *)MTA1_MKDF_MMIO_TRNG_ENTROPY;
 // clang-format on
 
 // TODO Real UDA is 4 words (16 bytes)
@@ -162,6 +164,17 @@ int main()
 	} else {
 		test_puts("All tests passed.\r\n");
 	}
+
+	test_puts("Here are 4*4 bytes from TRNG: ");
+	for (int i = 0; i <= 3; i++) {
+		while ((*trng_status &
+			(1 << MTA1_MKDF_MMIO_TRNG_STATUS_READY_BIT)) == 0) {
+		}
+		uint32_t rnd = *trng_entropy;
+		test_puthexn((uint8_t *)&rnd, 4);
+		test_puts(" ");
+	}
+	test_puts("\r\n");
 
 	test_puts("Now echoing what you type...\r\n");
 	for (;;) {

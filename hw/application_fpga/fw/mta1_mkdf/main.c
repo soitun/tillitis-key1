@@ -23,9 +23,11 @@ static volatile uint32_t *cdi =        (volatile uint32_t *)MTA1_MKDF_MMIO_MTA1_
 static volatile uint32_t *app_addr =   (volatile uint32_t *)MTA1_MKDF_MMIO_MTA1_APP_ADDR;
 static volatile uint32_t *app_size =   (volatile uint32_t *)MTA1_MKDF_MMIO_MTA1_APP_SIZE;
 
-#define LED_RED (1 << MTA1_MKDF_MMIO_MTA1_LED_R_BIT)
+#define LED_RED   (1 << MTA1_MKDF_MMIO_MTA1_LED_R_BIT)
 #define LED_GREEN (1 << MTA1_MKDF_MMIO_MTA1_LED_G_BIT)
-#define LED_BLUE (1 << MTA1_MKDF_MMIO_MTA1_LED_B_BIT)
+#define LED_BLUE  (1 << MTA1_MKDF_MMIO_MTA1_LED_B_BIT)
+#define LED_WHITE (LED_RED | LED_GREEN | LED_BLUE)
+// clang-format on
 
 static void print_hw_version(uint32_t name0, uint32_t name1, uint32_t ver)
 {
@@ -34,19 +36,15 @@ static void print_hw_version(uint32_t name0, uint32_t name1, uint32_t ver)
 	putc(name0 >> 16);
 	putc(name0 >> 8);
 	putc(name0);
-
 	putc('-');
-
 	putc(name1 >> 24);
 	putc(name1 >> 16);
 	putc(name1 >> 8);
 	putc(name1);
-
 	putc(' ');
 	putinthex(ver);
 	lf();
 }
-// clang-format on
 
 static void print_digest(uint8_t *md)
 {
@@ -60,6 +58,21 @@ static void print_digest(uint8_t *md)
 	lf();
 }
 
+/*
+The host program may do LOAD_USS and LOAD_APP_SIZE in any order. But host
+program *must* do both LOAD_USS and LOAD_APP_SIZE before doing the
+LOAD_APP_DATAs.
+
+If they don't, they will not have a predictable USS, because somebody might
+have done LOAD_USS before them.
+
+The last LOAD_APP_DATA (which loads the last block of the app binary, on
+whichever iteration this happens) will cause the USS to be used for the CDI
+calculation.
+
+Commands that are bad in some way does not cause any change to the state.
+*/
+
 int main()
 {
 	uint32_t local_name0 = *name0;
@@ -69,21 +82,15 @@ int main()
 	uint8_t cmd[CMDLEN_MAXBYTES];
 	uint8_t rsp[CMDLEN_MAXBYTES];
 	uint8_t *loadaddr = (uint8_t *)APP_RAM_ADDR;
-	int left = 0;	// Bytes left to read
-	int nbytes = 0; // Bytes to write to memory
-	uint8_t uss[32];
-	uint32_t local_app_size = 0;
-	uint8_t in;
-	uint8_t digest[32];
+	int left = 0; // Bytes left to receive
+	uint8_t uss[32] = {0};
+	uint8_t digest[32] = {0};
 
 	print_hw_version(local_name0, local_name1, local_ver);
 
-	// If host does not load USS, we use an all zero USS
-	memset(uss, 0, 32);
-
 	for (;;) {
 		// blocking; fw flashing white while waiting for cmd
-		in = readbyte_ledflash(LED_RED | LED_BLUE | LED_GREEN, 800000);
+		uint8_t in = readbyte_ledflash(LED_WHITE, 800000);
 
 		if (parseframe(in, &hdr) == -1) {
 			puts("Couldn't parse header\n");
@@ -109,7 +116,7 @@ int main()
 			puts("request: name-version\n");
 
 			if (hdr.len != 1) {
-				// Bad length - give them an empty response
+				// Bad cmd length - give them an empty response
 				fwreply(hdr, FW_RSP_NAME_VERSION, rsp);
 				break;
 			}
@@ -124,8 +131,8 @@ int main()
 		case FW_CMD_LOAD_USS:
 			puts("request: load-uss\n");
 
-			if (hdr.len != 128 || *app_size != 0) {
-				// Bad cmd length, or app_size already set
+			if (hdr.len != 128) {
+				// Bad cmd length
 				rsp[0] = STATUS_BAD;
 				fwreply(hdr, FW_RSP_LOAD_USS, rsp);
 				break;
@@ -141,28 +148,31 @@ int main()
 			puts("request: load-app-size\n");
 
 			if (hdr.len != 32) {
-				// Bad length
+				// Bad cmd length
 				rsp[0] = STATUS_BAD;
 				fwreply(hdr, FW_RSP_LOAD_APP_SIZE, rsp);
 				break;
 			}
 
 			// cmd[1..4] contains the size.
-			local_app_size = cmd[1] + (cmd[2] << 8) +
-					 (cmd[3] << 16) + (cmd[4] << 24);
+			uint32_t new_app_size = cmd[1] + (cmd[2] << 8) +
+						(cmd[3] << 16) + (cmd[4] << 24);
 
 			puts("app size: ");
-			putinthex(local_app_size);
+			putinthex(new_app_size);
 			lf();
 
-			if (local_app_size > APP_MAX_SIZE) {
+			if (new_app_size > APP_MAX_SIZE) {
 				rsp[0] = STATUS_BAD;
 				fwreply(hdr, FW_RSP_LOAD_APP_SIZE, rsp);
 				break;
 			}
 
-			*app_size = local_app_size;
+			*app_size = new_app_size;
 			*app_addr = 0;
+			// Clear also digest, because GET_APP_DIGEST returns it
+			// unconditionally
+			memset(digest, 0, 32);
 
 			// Reset where to start loading the program
 			loadaddr = (uint8_t *)APP_RAM_ADDR;
@@ -176,13 +186,13 @@ int main()
 			puts("request: load-app-data\n");
 
 			if (hdr.len != 128 || *app_size == 0) {
-				// Bad length of this command or bad app size -
-				// they need to call FW_CMD_LOAD_APP_SIZE first
+				// Bad cmd length, or app_size not yet set
 				rsp[0] = STATUS_BAD;
 				fwreply(hdr, FW_RSP_LOAD_APP_DATA, rsp);
 				break;
 			}
 
+			int nbytes;
 			if (left > 127) {
 				nbytes = 127;
 			} else {
@@ -227,8 +237,8 @@ int main()
 			puts("request: run-app\n");
 
 			if (hdr.len != 1 || *app_size == 0 || *app_addr == 0) {
-				// Bad cmd length, or app_size and app_addr are
-				// not both set
+				// Bad cmd length, or both app_size & app_addr
+				// are not yet set
 				rsp[0] = STATUS_BAD;
 				fwreply(hdr, FW_RSP_RUN_APP, rsp);
 				break;

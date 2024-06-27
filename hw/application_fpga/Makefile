@@ -68,6 +68,7 @@ VERILOG_SRCS = \
 	$(P)/core/uds/rtl/uds_rom.v \
 	$(P)/core/touch_sense/rtl/touch_sense.v \
 	$(P)/core/tk1/rtl/tk1.v \
+	$(P)/core/tk1/rtl/tk1_spi_master.v \
 	$(P)/core/tk1/rtl/udi_rom.v \
 	$(P)/core/uart/rtl/uart_core.v \
 	$(P)/core/uart/rtl/uart_fifo.v \
@@ -185,7 +186,10 @@ check-binary-hashes:
 # Source linting.
 #-------------------------------------------------------------------
 LINT=verilator
-LINT_FLAGS = +1364-2005ext+ --lint-only  -Wall -Wno-DECLFILENAME \
+# For Verilator 5.019 -Wno-GENUNNAMED needs to be added to LINT_FLAGS for the
+# cell library.
+LINT_FLAGS = +1364-2005ext+ --lint-only \
+	-Wall -Wno-DECLFILENAME -Wno-WIDTHEXPAND -Wno-UNOPTFLAT \
 	--timescale 1ns/1ns -DNO_ICE40_DEFAULT_ASSIGNMENTS
 
 lint: $(FPGA_SRC) $(VERILOG_SRCS) $(ICE40_SIM_CELLS)
@@ -198,9 +202,7 @@ lint: $(FPGA_SRC) $(VERILOG_SRCS) $(ICE40_SIM_CELLS)
 	config.vlt $^ \
 	>lint_issues.txt 2>&1 \
 	&& { rm -f lint_issues.txt; exit 0; } \
-	|| {   cat lint_issues.txt; exit 0; }
-	echo "Non-zero exit temporarily removed, see issue 182."
-	#|| {   cat lint_issues.txt; exit 1; }
+	|| {   cat lint_issues.txt; exit 1; }
 .PHONY: lint
 
 
@@ -236,9 +238,19 @@ tb:
 #-------------------------------------------------------------------
 # Main FPGA build flow.
 # Synthesis. Place & Route. Bitstream generation.
+#
+# To include the SPI-master, add the flag -DINCLUDE_SPI_MASTER to Yosys cmd.
+# This can, for example, be done using
+# 'make application_fpga.bin YOSYS_FLAG=-DINCLUDE_SPI_MASTER'.
+# Important: do a make clean between builds with and wihtout the SPI master.
+# Otherwise, there is a risk of unintended components persisting between
+# builds.
 #-------------------------------------------------------------------
-synth.json: $(FPGA_SRC) $(VERILOG_SRCS) bram_fw.hex
-	$(YOSYS_PATH)yosys -v3 -l synth.log -DBRAM_FW_SIZE=$(BRAM_FW_SIZE) \
+
+YOSYS_FLAG ?=
+
+synth.json: $(FPGA_SRC) $(VERILOG_SRCS) bram_fw.hex $(P)/data/uds.hex $(P)/data/udi.hex
+	$(YOSYS_PATH)yosys -v3 -l synth.log $(YOSYS_FLAG) -DBRAM_FW_SIZE=$(BRAM_FW_SIZE) \
 		-DFIRMWARE_HEX=\"$(P)/bram_fw.hex\" \
 		-p 'synth_ice40 -dsp -top application_fpga -json $@; write_verilog -attr2comment synth.v' \
 		$(filter %.v, $^)

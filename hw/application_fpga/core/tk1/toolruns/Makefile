@@ -19,15 +19,28 @@ TOP_SRC=../rtl/tk1.v $(SPI_SRC)
 TB_TOP_SRC =../tb/tb_tk1.v ../tb/sb_rgba_drv_sim.v ../tb/udi_rom_sim.v
 LINT_SRC=$(TOP_SRC) ../tb/sb_rgba_drv_sim.v ../tb/udi_rom_sim.v
 
+# Skip forcing PACKAGE for some targets
+ifeq ($(filter clean help MEM.TXT,$(MAKECMDGOALS)),)
+ifndef PACKAGE
+$(error PACKAGE variable is not defined. Please run 'make <target> PACKAGE=...'. Allowed PACKAGE values: sg48, uwg30)
+endif
+ifeq ($(PACKAGE), sg48)
+FPGA_PACKAGE_UPPER = SG48
+else ifeq ($(PACKAGE), uwg30)
+FPGA_PACKAGE_UPPER = UWG30
+else
+$(error Invalid PACKAGE '$(PACKAGE)'. Allowed PACKAGE values: sg48, uwg30)
+endif
+endif
+
 CC = iverilog
-CC_FLAGS = -Wall
+CC_FLAGS = -Wall -DPACKAGE_$(FPGA_PACKAGE_UPPER)
 
 LINT = verilator
-LINT_FLAGS = +1364-2005ext+ --lint-only  -Wall -Wno-fatal -Wno-DECLFILENAME
+LINT_FLAGS = +1364-2005ext+ --lint-only  -Wall -Wno-fatal -Wno-DECLFILENAME -DPACKAGE_$(FPGA_PACKAGE_UPPER)
 
 
 all: MEM.TXT spi.sim top.sim
-
 
 MEM.TXT:
 	../tools/mem_gen.py > MEM.TXT

@@ -7,6 +7,9 @@ functionality unique to the TKey1 can be found. This means that it
 provides more than one distinct functionality accessible via the core
 API.
 
+This core can currently be build for the chip packages `sg48` and
+`uwg30`. See the differences under `Control of RGB LED` and `Control
+and status of GPIO` below.
 
 ## API
 
@@ -36,6 +39,9 @@ This register control the RGB LED on the TKey device. Setting a bit to
 one turns the corresponding color on. It can be read and written by FW
 as well as by Apps.
 
+*Note:* For the `uwg30` chip package, this register is still available
+but the three color bits are ORed together to drive the single-color
+LED on that package. Any bit set to `1` will turn the LED on.
 
 ### Control and status of GPIO
 
@@ -53,6 +59,8 @@ level and present it to SW. GPIO three and four are outputs. They will
 emit either high or low voltage level depending on if the
 corresponding register is one or zero.
 
+*Note:* For the `uwg30` chip package, this API is present but the
+physical pins are not routed out.
 
 ### Application introspection
 

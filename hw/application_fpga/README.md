@@ -5,6 +5,8 @@
 The application FPGA is implemented using a Lattice [iCE40 UltraPlus
 UP5K
 device](https://www.latticesemi.com/en/Products/FPGAandCPLD/iCE40UltraPlus).
+Currently the design is buildable for two chip packages, the `sg48`
+and the `uwg30`.
 Only open tools are used in the toolchain.
 
 The design top level is in `rtl/application_fpga.v`. It contains
@@ -169,6 +171,9 @@ Contains:
 - Security monitor.
 - SPI main.
 - System reset.
+
+The LED and GPIO pin control differs depending on which package it is
+built for. See the `tk1` README for details.
 
 ### Illegal instruction monitor
 

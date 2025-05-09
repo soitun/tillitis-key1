@@ -34,7 +34,57 @@ TARGET_FREQ ?= 24
 # bits wide; an EBR is 128 32-bits words)
 BRAM_FW_SIZE ?= 2048
 
-PIN_FILE ?= application_fpga_tk1.pcf
+PACKAGE_REQUIRED_TARGETS := \
+	all \
+	application_fpga.asc \
+	application_fpga.bin \
+	application_fpga_par.json \
+	application_fpga_testfw.bin \
+	check-binary-hashes \
+	lint \
+	synth.json \
+	tb_application_fpga \
+	timing \
+	verilator
+
+# Set MAKECMDGOALS_OR_DEFAULT to "all" if no Make target is given
+MAKECMDGOALS_OR_DEFAULT := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),all)
+
+ifneq ($(filter $(MAKECMDGOALS_OR_DEFAULT),$(PACKAGE_REQUIRED_TARGETS)),)
+
+ifndef PACKAGE
+$(error PACKAGE variable is not defined. Please run 'make <target> PACKAGE=...'. Allowed PACKAGE values: sg48, uwg30)
+endif
+
+ifeq ($(PACKAGE), sg48)
+
+PIN_FILE = application_fpga_tk1_sg48.pcf
+FPGA_PACKAGE = sg48
+FPGA_PACKAGE_UPPER = SG48
+BUILD_SEED = 2945058561865725735
+
+else ifeq ($(PACKAGE), uwg30)
+
+PIN_FILE = application_fpga_tk1_uwg30.pcf
+FPGA_PACKAGE = uwg30
+FPGA_PACKAGE_UPPER = UWG30
+BUILD_SEED = 6490300783264432670
+
+else
+$(error Invalid PACKAGE '$(PACKAGE)'. Allowed PACKAGE values: sg48, uwg30)
+endif
+
+endif
+
+#-------------------------------------------------------------------
+# Canned recipe: check that PACKAGE is set at recipe time.
+#-------------------------------------------------------------------
+define CHECK_PACKAGE
+	@if [ -z "$(PACKAGE)" ]; then \
+		echo "PACKAGE variable is not defined. Run 'make <target> PACKAGE=...'"; \
+		exit 1; \
+	fi
+endef
 
 SIZE ?= llvm-size
 OBJCOPY ?= llvm-objcopy
@@ -314,10 +364,11 @@ testfw.hex: testfw.bin testfw_size_mismatch
 
 .PHONY: check-binary-hashes
 check-binary-hashes:
+	$(CHECK_PACKAGE)
 	sha512sum firmware.bin
 	sha256sum application_fpga.bin
 	sha512sum -c firmware.bin.sha512
-	sha256sum -c application_fpga.bin.sha256
+	sha256sum -c application_fpga.bin.$(FPGA_PACKAGE).sha256
 
 %.bin: %.elf
 	$(OBJCOPY) --input-target=elf32-littleriscv --output-target=binary $< $@
@@ -345,9 +396,11 @@ lint: $(FPGA_VERILOG_SRCS) \
 		$(VERILOG_SRCS) \
 		$(PICORV32_SRCS) \
 		$(ICE40_SIM_CELLS)
+	$(CHECK_PACKAGE)
 	$(LINT) $(LINT_FLAGS) \
 	-DBRAM_FW_SIZE=$(BRAM_FW_SIZE) \
 	-DFIRMWARE_HEX=\"$(P)/firmware.hex\" \
+	-DPACKAGE_$(FPGA_PACKAGE_UPPER) \
 	-DUDS_HEX=\"$(P)/data/uds.hex\" \
 	-DUDI_HEX=\"$(P)/data/udi.hex\" \
 	--top-module application_fpga \
@@ -393,6 +446,7 @@ checkfmt: $(FPGA_VERILOG_SRCS) $(SIM_VERILOG_SRCS) $(VERILATOR_VERILOG_SRCS) $(V
 verilator: $(VERILATOR_VERILOG_SRCS) $(VERILOG_SRCS) $(PICORV32_SRCS) \
 		firmware.hex $(ICE40_SIM_CELLS) \
 		$(P)/tb/application_fpga_verilator.cc
+	$(CHECK_PACKAGE)
 	verilator \
 		--timescale 1ns/1ns \
 		-DNO_ICE40_DEFAULT_ASSIGNMENTS \
@@ -402,6 +456,7 @@ verilator: $(VERILATOR_VERILOG_SRCS) $(VERILOG_SRCS) $(PICORV32_SRCS) \
 		-Wno-UNOPTFLAT \
 		-DBRAM_FW_SIZE=$(BRAM_FW_SIZE) \
 		-DFIRMWARE_HEX=\"$(P)/firmware.hex\" \
+		-DPACKAGE_$(FPGA_PACKAGE_UPPER) \
 		-DUDS_HEX=\"$(P)/data/uds.hex\" \
 		-DUDI_HEX=\"$(P)/data/udi.hex\" \
 		--cc \
@@ -417,6 +472,7 @@ verilator: $(VERILATOR_VERILOG_SRCS) $(VERILOG_SRCS) $(PICORV32_SRCS) \
 # Run all testbenches
 #-------------------------------------------------------------------
 tb:
+	$(CHECK_PACKAGE)
 	make -C core/timer/toolruns sim-top
 	make -C core/tk1/toolruns sim-top
 	make -C core/touch_sense/toolruns sim-top
@@ -434,24 +490,27 @@ tb:
 YOSYS_FLAG ?=
 
 synth.json: $(FPGA_VERILOG_SRCS) $(VERILOG_SRCS) $(PICORV32_SRCS) bram_fw.hex
+	$(CHECK_PACKAGE)
 	$(YOSYS_PATH)yosys \
 		-v3 \
 		-l synth.txt \
 		$(YOSYS_FLAG) \
 		-DBRAM_FW_SIZE=$(BRAM_FW_SIZE) \
 		-DFIRMWARE_HEX=\"$(P)/bram_fw.hex\" \
+		-DPACKAGE_$(FPGA_PACKAGE_UPPER) \
 		-p 'synth_ice40 -abc2 -device u -dff -dsp -top application_fpga -json $@' \
 		-p 'write_verilog -attr2comment synth.v' \
 		$(filter %.v, $^)
 
 application_fpga_par.json: synth.json $(P)/data/$(PIN_FILE)
+	$(CHECK_PACKAGE)
 	$(NEXTPNR_PATH)nextpnr-ice40 \
 		-l application_fpga_par.txt \
-		--seed 2945058561865725735 \
+		--seed $(BUILD_SEED) \
 		--freq $(TARGET_FREQ) \
 		--ignore-loops \
 		--up5k \
-		--package sg48 \
+		--package $(FPGA_PACKAGE) \
 		--json $< \
 		--pcf $(P)/data/$(PIN_FILE) \
 		--write $@ \
@@ -459,12 +518,13 @@ application_fpga_par.json: synth.json $(P)/data/$(PIN_FILE)
 		|| { rm -f application_fpga_par.json; exit 1; }
 
 application_fpga.asc: application_fpga_par.json $(P)/data/uds.hex $(P)/data/udi.hex
+	$(CHECK_PACKAGE)
 	UDS_HEX="$(P)/data/uds.hex" \
 	UDI_HEX="$(P)/data/udi.hex" \
 	OUT_ASC=$@ \
 	$(NEXTPNR_PATH)nextpnr-ice40 \
 		--up5k \
-		--package sg48 \
+		--package $(FPGA_PACKAGE) \
 		--ignore-loops \
 		--json $< \
 		--run tools/patch_uds_udi.py
@@ -494,6 +554,7 @@ tb_application_fpga: $(SIM_VERILOG_SRCS) \
 			./tb/output_spram2.hex \
 			./tb/output_spram3.hex \
 			|| { echo -e "\n -- Put your app.bin to simulate in the \"tb\" directory\n"; false; }
+	$(CHECK_PACKAGE)
 	verilator \
 		-j $(shell nproc --ignore=1) \
 		--binary \
@@ -511,6 +572,7 @@ tb_application_fpga: $(SIM_VERILOG_SRCS) \
 		-DAPP_SIZE=$(shell ls -l tb/app.bin| awk '{print $$5}') \
 		-DBRAM_FW_SIZE=$(BRAM_FW_SIZE) \
 		-DFIRMWARE_HEX=\"$(P)/simfirmware.hex\" \
+		-DPACKAGE_$(FPGA_PACKAGE_UPPER) \
 		-DUDS_HEX=\"$(P)/data/uds.hex\" \
 		-DUDI_HEX=\"$(P)/data/udi.hex\" \
 		$(filter %.v, $^)
@@ -546,7 +608,8 @@ check-hardware:
 # Post build analysis.
 #-------------------------------------------------------------------
 timing: application_fpga.asc $(P)/data/$(PIN_FILE)
-	$(ICESTORM_PATH)icetime -c 18 -tmd up5k -P sg48 -p $(P)/data/$(PIN_FILE) -t $<
+	$(CHECK_PACKAGE)
+	$(ICESTORM_PATH)icetime -c 18 -tmd up5k -P $(FPGA_PACKAGE) -p $(P)/data/$(PIN_FILE) -t $<
 
 view: tb_application_fpga_vcd
 	gtkwave $< application_fpga.gtkw
@@ -604,23 +667,26 @@ help:
 	@echo ""
 	@echo "Supported targets:"
 	@echo "------------------"
-	@echo "all                  Build all targets."
-	@echo "check                Run static analysis on firmware."
-	@echo "splint               Run splint static analysis on firmware."
-	@echo "firmware.elf         Build firmware ELF file."
-	@echo "firmware.hex         Build firmware converted to hex, to be included in bitstream."
-	@echo "bram_fw.hex          Build a fake BRAM file that will be filled in later after place-n-route."
-	@echo "verilator            Build Verilator simulation program"
-	@echo "tb_application_fpga  Build testbench simulation for the design"
-	@echo "lint                 Run lint on Verilog source files."
-	@echo "tb                   Run all testbenches"
-	@echo "prog_flash           Program device flash with FGPA bitstream (including firmware), partition table, and defaultapp.bin (using the RPi Pico-based programmer)."
-	@echo "prog_flash_bs        Program device flash with FGPA bitstream including firmware (using the RPi Pico-based programmer)."
-	@echo "prog_flash_testfw    Program device flash as above, but with testfw."
-	@echo "clean                Delete all generated files."
-	@echo "clean_fw             Delete only generated files for firmware. Useful for fw devs."
-	@echo "clean_tb             Delete only generated files for testbenches."
-
+	@echo "all PACKAGE=...                    Build all targets."
+	@echo "check                              Run static analysis on firmware."
+	@echo "splint                             Run splint static analysis on firmware."
+	@echo "firmware.elf                       Build firmware ELF file."
+	@echo "firmware.hex                       Build firmware converted to hex, to be included in bitstream."
+	@echo "bram_fw.hex                        Build a fake BRAM file that will be filled in later after place-n-route."
+	@echo "verilator                          Build Verilator simulation program"
+	@echo "tb_application_fpga PACKAGE=...    Build testbench simulation for the design"
+	@echo "lint PACKAGE=...                   Run lint on Verilog source files."
+	@echo "tb PACKAGE=...                     Run all testbenches"
+	@echo "prog_flash                         Program device flash with FGPA bitstream (including firmware), partition table, and defaultapp.bin (using the RPi Pico-based programmer)."
+	@echo "prog_flash_bs                      Program device flash with FGPA bitstream including firmware (using the RPi Pico-based programmer)."
+	@echo "prog_flash_testfw                  Program device flash as above, but with testfw."
+	@echo "clean                              Delete all generated files."
+	@echo "clean_fw                           Delete only generated files for firmware. Useful for fw devs."
+	@echo "clean_tb                           Delete only generated files for testbenches."
+	@echo ""
+	@echo "Configuration Options:"
+	@echo "PACKAGE=...                        Target hardware package. Allowed PACKAGE values: sg48, uwg30"
+	@echo ""
 #=======================================================================
 # EOF Makefile
 #=======================================================================

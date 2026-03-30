@@ -35,11 +35,8 @@ TL;DR:
   the exact same device app as the first app in the chain.
 
 - If the first app is our boot verifier we believe the attacker *also*
-  needs access to the vendor's private key. Other verifying apps might
-  have similar requirements.
-
-- Physical access is needed to do a denial of service either by
-  stealing the TKey or breaking it.
+  needs access to the vendor's private and public key to get the same
+  secret. Other verifying apps might have similar requirements.
 
 - We think there are some assets (EBR) available to someone with
   physical access and the knowledge and equipment to do a warm boot
@@ -185,8 +182,8 @@ There are two major type of attacks
 
 1. Software (SW) based. These are attacks against the TKey device that
    are performed from a client and enter the TKey device through the
-   USB port. The SW attacks includes buffer flow attacks, attacks on
-   the firmware protocol.
+   USB port. The SW attacks includes buffer overflow attacks and
+   attacks on the firmware protocol.
 
 2. Hardware (HW) based. These are attacks against the FPGA design of
    the TKey device as well as the PCB. The HW attacks includes fault
@@ -197,8 +194,9 @@ There are two major type of attacks
 
 ## In scope
 
-- SW attacks from the client against the firmware in the FPGA as well
-  as the FPGA design itself via USB.
+- SW attacks from the client against the firmware in the FPGA, the
+  boot verifier in flash slot 0, and as the FPGA design itself via
+  USB.
 
 - Timing attacks on the firmware and the FPGA design.
 
@@ -224,7 +222,8 @@ There are two major type of attacks
 
 - EM leakage.
 
-- Attacks on the TKey device apps.
+- Attacks on the TKey device apps, except the special case the boot
+  verifier in slot 0, which we count as a trusted boot stage.
 
 - Leakage and glitching attacks including:
 
@@ -539,6 +538,7 @@ Threats:
 
 - Changed to malicious apps.
 - Changed remotely.
+- Bypassing verified boot.
 
 Mitigation:
 
@@ -550,6 +550,11 @@ Mitigation:
   touch sensor. For malicious apps we rely on the app getting it's own
   CDI with the measured boot/verified boot combination so a malicious
   app cannot leak secrets.
+
+- The TKey allows a reset to reset and start directly from slot 1,
+  bypassing the boot verifier in slot 0. However, the CDI computed
+  will then be different since the app in slot 1 will be measured
+  directly, and not use verified boot at all.
 
 ## Known weaknesses
 

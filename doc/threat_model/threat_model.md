@@ -146,10 +146,14 @@ mitigations in the threat model.
   Partition table on the TKey flash. Keeps metadata about the vendor
   key, preloaded apps, and app storage slots.
 
-- Firmware memory.
+- Firmware RAM.
 
   The firmware has its own memory, `FW_RAM`. It does all its sensitive
   computations here.
+
+- Firmware ROM.
+
+  Firmware is stored and executed from `FW_ROM`.
 
 - RAM.
 
@@ -600,9 +604,11 @@ Mitigation:
 
     These use EBR:
 
+    - `CPU register x1 to x31`.
     - `FW_RAM`, including the `resetinfo` that is kept over soft
       resets.
-    - TODO List others using EBR.
+    - `FW_ROM`.
+    - `UART`, specifically the Rx-FIFO.
 
 - The CH552 MCU USB weaknesses
 

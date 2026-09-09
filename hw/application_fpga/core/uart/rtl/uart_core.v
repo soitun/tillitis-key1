@@ -119,7 +119,7 @@ module uart_core (
   reg  [ 2 : 0] erx_ctrl_new;
   reg           erx_ctrl_we;
 
-  reg           txd_reg;
+  reg           txd_reg = 1'b1;
   reg           txd_new;
   reg           txd_we;
 

@@ -487,7 +487,9 @@ Device Secret is used as a key in the BLAKE2s hash function.
    the client:
 
    ```C
-   CDI = blake2s(UDS, domain + blake2s(app) + USS)
+   CDI = blake2s(
+       key = UDS,
+       data = domain || blake2s(app) || USS)
    ```
 
    This is the default case.
@@ -498,8 +500,16 @@ Device Secret is used as a key in the BLAKE2s hash function.
    client:
 
    ```C
-   CDI = blake2s(UDS, domain + blake2s(previous-CDI, measured_id_seed)* + USS)
+   CDI = blake2s(
+       key = UDS,
+       data = domain || measured_id* || USS)
    ```
+
+   ```C
+    measured_id* = blake2s(
+        key = previous-CDI,
+        data = measured_id_seed)
+    ```
 
   This alternative computation is only done if the `mask` in `struct
   reset` includes `RESET_SEED`.
@@ -510,17 +520,11 @@ Device Secret is used as a key in the BLAKE2s hash function.
   1. Before reset (marked with an asterisk above): Typically a calling
      app would do a `TK1_SYSCALL_RESET` system call and fill in
      something it wants to be mixed into the new CDI in
-     `measured_id_seed`, The firmware will then mix a new
+     `measured_id_seed`. The firmware will then mix a new
      `measured_id` before doing the actual reset:
 
-     ```C
-     measured_id = blake2s(CDI, measured_id_seed)
-      ```
-
-     The CDI is here used as the key in BLAKE2s.
-
-  2. After reset: `measured_id` will survive the reset and will then
-     be used in the actual CDI computation after the reset.
+  2. After reset: `measured_id` will survive the reset and will be
+     used in the CDI computation for the next app.
 
 The domain byte is used to separate the following cases:
 
@@ -891,7 +895,9 @@ access a storage area. It's computed with the 16 byte version of the
 BLAKE2s hash function like this:
 
 ```C
-digest = BLAKE2s_16(CDI, nonce)
+digest = BLAKE2s_16(
+    key = CDI,
+    data = nonce)
 ```
 
 The auth tag is filled in when a device app first allocates an area.

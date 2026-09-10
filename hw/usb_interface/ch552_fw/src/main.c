@@ -1134,17 +1134,10 @@ void UsbEp0SetupHandler(void)
                 if (( UsbSetupBuf->bmRequestType & USB_REQ_RECIP_MASK) == USB_REQ_RECIP_DEVICE) { // Set up the device
                     if ((((uint16_t) UsbSetupBuf->wValueH << 8) | UsbSetupBuf->wValueL) == 0x01) {
                         if (CfgDesc[7] & 0x20) {
-                            printStrSetup("Suspend\n");
-                            while (XBUS_AUX & bUART0_TX) {
-                                ; // Wait for sending to complete
-                            }
-                            SAFE_MOD = 0x55;
-                            SAFE_MOD = 0xAA;
-                            WAKE_CTRL = bWAK_BY_USB | bWAK_RXD0_LO | bWAK_RXD1_LO; // USB or RXD0/1 can be woken up when there is a signal
-                            PCON |= PD; // Sleep
-                            SAFE_MOD = 0x55;
-                            SAFE_MOD = 0xAA;
-                            WAKE_CTRL = 0x00;
+                            printStrSetup("Enable remote wake up\n");
+
+                                // Not implemented
+
                         } else {
                             len = 0xFF; // Operation failed
                         }
@@ -1177,6 +1170,7 @@ void UsbEp0SetupHandler(void)
                             break;
                         case 0x01:
                             UEP1_CTRL = (UEP1_CTRL & ~bUEP_R_TOG) | UEP_R_RES_STALL; // Set endpoint 1 OUT (RX) Stall (error)
+                            break;
                         default:
                             len = 0xFF; // Operation failed
                             break;

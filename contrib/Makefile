@@ -91,11 +91,12 @@ run-make-clean_fw:
 	 $(IMAGE) make clean_fw application_fpga.bin PACKAGE=$(PACKAGE)
 
 flash:
+	$(CHECK_PACKAGE)
 	podman run --rm \
 	$(tp) \
 	--mount type=bind,source="`pwd`/../hw/application_fpga",target=/build \
 	-w /build \
-	-it $(IMAGE) make prog_flash
+	-it $(IMAGE) make prog_flash PACKAGE=$(PACKAGE)
 
 
 pull:

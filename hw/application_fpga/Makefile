@@ -42,6 +42,9 @@ PACKAGE_REQUIRED_TARGETS := \
 	application_fpga_testfw.bin \
 	check-binary-hashes \
 	lint \
+	prog_flash \
+	prog_flash_bs \
+	prog_flash_testfw \
 	synth.json \
 	tb_application_fpga \
 	timing \

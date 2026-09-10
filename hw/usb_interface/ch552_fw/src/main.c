@@ -930,10 +930,6 @@ void UsbEp0SetupHandler(void)
                     pDescr += len;
                     break;
 
-                case USB_DESC_TYPE_DEVICE_QUALIFIER:
-                    printStrSetup("DEVICE_QUALIFIER\n");
-                    break;
-
                 case USB_DESC_TYPE_CONFIGURATION:
                     printStrSetup("CONFIGURATION\n");
                     pDescr = ActiveCfgDesc; // Send the configuration descriptor to the buffer to be sent
@@ -1048,13 +1044,10 @@ void UsbEp0SetupHandler(void)
                     pDescr += len;
                     break;
 
-                case USB_DESC_TYPE_DEBUG:
-                    printStrSetup("DEBUG\n");
-                    break;
-
                 default:
                     printStrSetup("Unknown descriptor!\n");
                     len = 0xFF; // Unknown descriptor
+                    SetupLen = 0;
                     break;
                 } // END switch (UsbSetupBuf->wValueH)
                 break;
@@ -1079,6 +1072,10 @@ void UsbEp0SetupHandler(void)
 
             case USB_GET_INTERFACE:
                 printStrSetup("GET_INTERFACE\n");
+                Ep0Buffer[0] = 0x00;
+                if (SetupLen >= 1) {
+                    len = 1;
+                }
                 break;
 
             case USB_CLEAR_FEATURE:
